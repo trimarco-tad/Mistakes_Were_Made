@@ -17,7 +17,7 @@ editor_options:
 
 Working with large, open-access datasets can serve many purposes. It can be an excellent way to explore new ideas, before investing in field-work or experiments. It can be a great way to take local or experimental results and expand them to different ecosystems, places, or landscapes. Or it can be an excellent way to build, validate, and test ecological models on regional or national scales. 
 
-So why doesn't everyone use public data? Well, it's often collected by a variety of organizations, with different methods, units, and incosistent metadata. Together these issues with large public datasets, make them "messy." Messy data can be messy in many different ways, but at the basic level it means that data is hard to analyze, not because the data itself is bad, but because the way it is organized is unclear or inconsistent. 
+So why doesn't everyone use public data? Well, it's often collected by a variety of organizations, with different methods, units, and inconsistent metadata. Together these issues with large public datasets, make them "messy." Messy data can be messy in many different ways, but at the basic level it means that data is hard to analyze, not because the data itself is bad, but because the way it is organized is unclear or inconsistent. 
 
 In this lab, we will learn some tricks to "tidying" data, making it analysis-ready. We will depend heavily on the [tidyverse](https://www.tidyverse.org/), an excellent series of packages that make data manipulation beautiful and easy. We will also be working with water quality portal data so we will also use the excellent [dataRetrieval](https://github.com/USGS-R/dataRetrieval) package for downloading data from the Water Quality Portal and the USGS. 
 
@@ -115,7 +115,7 @@ for(i in 1:length(parameters)){
   #You don't have to constantly rename variables. I love them. 
   
   conc.list[[i]] <- readWQPdata(site.args) %>%
-    mutate(parameter=names(parameters)[i]) #Mutate just adds a new column to the data frame
+    mutate(parameter=names(parameters)[[i]]) #Mutate just adds a new column to the data frame
   
   #Pipes make the above command simple and succinct versus something more complicated like:
   
@@ -135,7 +135,7 @@ We also need to download some site info so we can know where these sites are.
 
 
 
-```{r site info download, eval=F}
+```{r site info download, eval=T}
 #In addition to concentration informatino, we probably want to know some things about the sites
 #dplyr::select can help us only keep site information that is useful. 
 
@@ -163,7 +163,7 @@ There are two data types we downloaded. First site info which has things like la
 
 ```{r site info}
 
-head(site..info)
+head(site.info)
 ```
 
 This dataset looks nice because it has all the information we need and nothing extra. Now let's look at the concentration data. 
@@ -172,7 +172,7 @@ This dataset looks nice because it has all the information we need and nothing e
 head(conc.long) %>%
   kable(.,'html') %>%
   kable_styling() %>%
-  scroll_box(width='800px,height='300px')
+  scroll_box(width='800px',height='300px')
   
 ```
 
@@ -212,7 +212,7 @@ Now let's look at the tidier version
 ```{r examine tidier data}
 head(conc.long) %>%
   kable(.,'html') %>%
-  kablle_styling() %>%
+  kable_styling() %>%
   scroll_box(width='800px',height='300px')
 ```
 
@@ -232,7 +232,7 @@ We just need to remove these observations with a `dplyr::filter` call and then s
 
 ```{r tidy}
 conc.tidy <- conc.clean %>% 
-  filter(units = 'tons/day') %>%
+  filter(units == 'mg/l') %>%
   mutate(date=ymd(date)) %>%
   select(date,
          parameter,
@@ -275,7 +275,7 @@ site.sf <- site.info %>%
   st_as_sf(., coords=c('long','lat'), crs=4326)
 
 
-mapview(site.info)
+mapview(site.sf)
 
 ```
 
@@ -293,7 +293,7 @@ To keep the plots simple at first let's look at calcium data by site.
 ```{r daily plot}
 conc.daily %>%
   filter(parameter == 'Calcium') %>%
-  ggplot(.,aes(x=date,y=conc)) + 
+  ggplot(.,aes(x=date,y=conc_mean)) + 
   geom_point() + 
   facet_wrap(~SiteID)
   
@@ -310,8 +310,8 @@ Let's shrink the dataset to only look at annual change.
 conc.annual <- conc.daily %>%
   mutate(year=year(date)) %>%
   group_by(SiteID,year,parameter) %>%
-  summarize(annual_mean=mean(conc,na.rm=T),
-            annual_var=var(conc,na.rm=T))
+  summarize(annual_mean=mean(conc_mean,na.rm=T),
+            annual_var=var(conc_mean,na.rm=T))
   
 
 ```
@@ -370,7 +370,7 @@ From basic weathering geochemistry principles we know that Bicarbonate concentra
 
 ```{r}
 conc.wide <- conc.annual %>%
-  select(annual_var) %>%
+  select(-annual_var) %>%
   spread(key=parameter,value=annual_mean) %>%
   mutate(`Mg+Ca`=Magnesium+Calcium)
 
@@ -421,7 +421,7 @@ Now we have an individual time-series analysis model for each site and parameter
 ```{r}
 conc.models %>%
   mutate(mod.glance=map(mods,glance)) %>%
-  unnest(mod.gglance) %>% #Unnesting unwraps the nested column. 
+  unnest(mod.glance) %>% #Unnesting unwraps the nested column. 
   arrange(desc(adj.r.squared)) %>%
   select(parameter,SiteID,adj.r.squared,p.value,logLik,AIC) %>%
   kable(.,'html') %>%
